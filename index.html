@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soneium Ecosystem Badges Checker</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; }
+        input[type="text"] { padding: 8px; width: 300px; margin-right: 5px; border: 1px solid #ccc; }
+        button { padding: 8px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background-color: #0056b3; }
+        #collectionList { margin-top: 20px; border: 1px solid #eee; padding: 15px; background-color: #f9f9f9; border-radius: 4px; }
+        #scanStatus { margin-top: 10px; font-style: italic; color: #555; min-height: 1.2em; }
+        .collection-item {
+            border-bottom: 1px dashed #ddd;
+            padding: 8px 0;
+            opacity: 0.2; /* Mặc định mờ */
+            transition: opacity 0.5s ease-in-out; /* Hiệu ứng mượt */
+        }
+        .collection-item:last-child { border-bottom: none; }
+         /* Class để làm nổi bật item khớp */
+        .collection-item.highlighted {
+            opacity: 1;
+        }
+        .collection-item p { margin: 2px 0; }
+        .error { color: red; font-weight: bold; font-style: normal;}
+        .loading { color: #0056b3; font-style: normal; font-weight: bold;}
+        .success { color: green; font-style: normal; font-weight: bold; }
+        .label { font-weight: bold; color: #333; display: inline-block;}
+        .contract{margin-left:5px;}
+
+    </style>
+</head>
+<body>
+    <h1>Soneium Ecosystem Badges Checker</h1>
+
+    <input type="text" id="address" placeholder="EVM address (0x...)">
+    <button onclick="scanAndHighlightNFTs()">Check</button>
+    <div id="scanStatus"></div>
+
+    <h2>Result:</h2>
+    <div id="collectionList">
+        <!-- Danh sách gốc sẽ được render ở đây bằng JavaScript -->
+    </div>
+
+    <script>
+        const masterCollections = [
+            { "address": "0xCA707D22E248740aDaA9C63580F7A35201B18d30", "name": "UneMeta Soneium Badge" },
+            { "address": "0x066ABA7c3520e300113C0515FF41c084eE0c95Ea", "name": "Sonus x Soneium Ecosystem Badge" },
+            { "address": "0x1eC6AACC79f3c4817d7fea2268e1c54C6b2662Fb", "name": "Owlto X Soneium Ecosystem Badge" },
+            { "address": "0xcf87B2d5Ab008D41159f6737E2a5b6a3Bc40b753", "name": "UntitledBank Ecosystem badge" },
+            { "address": "0xAa6c38A85e5781bCc410693B52F64EfF1aFcd3c6", "name": "SONEX GOAT BADGE" },
+            { "address": "0x391Dece93d18Fca922bF337C25Ee38BeA74Db63E", "name": "Arkada x Soneium Ecosystem Badge" },
+            { "address": "0x44EEfAC1D5Db283B2dD99e226B864da271D82952", "name": "Biru x Soneium Ecosystem Badge" },
+            { "address": "0x769fd13578CF6eafd103562A3C3271D5293D481d", "name": "2P2E Pioneer" },
+            { "address": "0xc7fe48E4B18e0aa5aaF0F5aa0c911b9e826e5Ebb", "name": "HandsNFT AI" },
+            { "address": "0x4A33e2E308E5d9C0188d209F1bF443Ff7CfB4A31", "name": "Sonova - Ecosystem badge on Soneium" },
+            { "address": "0x11B2876C58cFb7501Db60d0112AF8A8EfEB0A81D", "name": "KYO FINANCE : DISC-01" },
+            { "address": "0x3a634e6f8C2bf2C5894722B908d99e3cF9C62eD3", "name": "Sake Ecosystem Badge" },
+            { "address": "0x2DCD9B33F0721000Dc1F8f84B804d4CFA23d7713", "name": "VelodromeSoneiumBadge" },
+            { "address": "0x7e058E9eeb81758F80049d0F2c1C1A7b47919697", "name": "Soneium Ecosystem Badge on OmniHub" },
+            { "address": "0x6DD843fe15dbFD41F001d448cb246ac8b65a6027", "name": "SoneFi x Soneium Ecosystem Badge" },
+            { "address": "0x890a19A1Dd75AAEcc4eDFce4685bb59C8ABEe78A", "name": "Posse Proof of Participation" },
+            { "address": "0x4591D540B692CBeD60Db7781B7683910f7a3BF8C", "name": "NFTs2Me Ecosystem Badge on Soneium" },
+            { "address": "0x4a3b67b339c272fAb639B0CAF3Ce7852B2Aa0833", "name": "waveX Soneium Ecosystem Badge" },
+            { "address": "0x9d83A657581A966aDf1c346dAfEe3EBe258EC26D", "name": "Mithraeum: Soneium Chronicles - Badge" },
+        ];
+
+        function renderMasterList() {
+            const listContainer = document.getElementById('collectionList');
+            listContainer.innerHTML = '';
+
+            masterCollections.forEach(collection => {
+                const itemDiv = document.createElement('div');
+                const addressLower = collection.address.toLowerCase();
+                itemDiv.id = `nft-${addressLower}`;
+                itemDiv.className = 'collection-item';
+
+                itemDiv.innerHTML = `
+                    <p><span class="label"></span> ${collection.name || 'N/A'}<span class="label contract"><a href='https://soneium.blockscout.com/token/${collection.address}'>(</span>${collection.address || 'N/A'})</a></p>
+
+                `;
+                listContainer.appendChild(itemDiv);
+            });
+        }
+
+        async function fetchWalletCollectionAddresses(walletAddress) {
+             const baseApiUrl = `https://soneium.blockscout.com/api/v2/addresses/${walletAddress}/nft`;
+            const tokenTypes = 'ERC-721,ERC-404,ERC-1155';
+            const statusDiv = document.getElementById('scanStatus');
+
+            let fetchedItems = [];
+            let nextPageParams = null;
+            let pageCount = 0;
+            const maxPages = 6;
+
+            do {
+                pageCount++;
+                statusDiv.innerHTML = `<p class="loading">Scanning page ${pageCount}...</p>`;
+
+                const params = new URLSearchParams(nextPageParams || {});
+                params.set('type', tokenTypes);
+                const currentApiUrl = `${baseApiUrl}?${params.toString()}`;
+
+                console.log(`Fetching page ${pageCount}: ${currentApiUrl}`);
+
+                const response = await fetch(currentApiUrl, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    let errorBody = '';
+                    try { errorBody = await response.text(); } catch (e) { /* Ignore */ }
+                    throw new Error(`API Error ${pageCount}: ${response.status} ${response.statusText}. Body: ${errorBody}`);
+                }
+
+                const data = await response.json();
+
+                if (data && Array.isArray(data.items)) {
+                    fetchedItems = fetchedItems.concat(data.items);
+                } else {
+                    console.warn(`Page ${pageCount} did not return the expected { items: [...] } structure. Data received:`,  data);
+                }
+
+                nextPageParams = data.next_page_params;
+
+                if (!nextPageParams || pageCount >= maxPages) {
+                    break;
+                }
+
+            } while (nextPageParams && pageCount < maxPages);
+
+            const fetchedAddressesLower = new Set();
+             fetchedItems.forEach(item => {
+                 if (item && item.token && item.token.address) {
+                    fetchedAddressesLower.add(item.token.address.toLowerCase());
+                 }
+             });
+
+            return fetchedAddressesLower;
+        }
+
+        async function scanAndHighlightNFTs() {
+            const addressInput = document.getElementById('address');
+            const walletAddress = addressInput.value.trim();
+            const statusDiv = document.getElementById('scanStatus');
+
+            document.querySelectorAll('.collection-item').forEach(el => {
+                el.classList.remove('highlighted');
+            });
+
+
+            statusDiv.innerHTML = '<p class="loading">Scanning...</p>';
+
+            if (!walletAddress.startsWith('0x') || walletAddress.length !== 42) {
+                statusDiv.innerHTML = '<p class="error">Invalid wallet address!</p>';
+                return;
+            }
+
+            try {
+                const ownedCollectionAddresses = await fetchWalletCollectionAddresses(walletAddress);
+                let matchCount = 0;
+
+                masterCollections.forEach(masterCollection => {
+                    const masterAddrLower = masterCollection.address.toLowerCase();
+                    const elementId = `nft-${masterAddrLower}`;
+                    const element = document.getElementById(elementId);
+
+                    if (element) {
+                        if (ownedCollectionAddresses.has(masterAddrLower)) {
+                            element.classList.add('highlighted');
+                            matchCount++;
+                        } else {
+                            element.classList.remove('highlighted'); 
+                        }
+                    }
+                });
+
+                statusDiv.innerHTML = `<p class="success">Done! ${matchCount} badges have been found.</p>`;
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        window.onload = renderMasterList;
+
+    </script>
+</body>
+</html>
